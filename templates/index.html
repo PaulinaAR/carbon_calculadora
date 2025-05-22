@@ -1,0 +1,105 @@
+<!DOCTYPE html>
+<html lang="es">
+<head>
+    <meta charset="UTF-8" />
+    <title>Calculadora CO2</title>
+    <!-- Bootstrap CSS -->
+    <link href="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/css/bootstrap.min.css" rel="stylesheet" crossorigin="anonymous" />
+    <link rel="stylesheet" href="/static/style.css" />
+</head>
+<body>
+
+    <!-- Navbar -->
+    <nav class="navbar navbar-expand-lg" style="background-color: #43a047;">
+      <div class="container-fluid">
+        <a class="navbar-brand text-white" href="{{ url_for('index') }}" style="font-weight: 700;">EcoHuella</a>
+        <button class="navbar-toggler" type="button" data-bs-toggle="collapse" data-bs-target="#navbarNav" 
+                aria-controls="navbarNav" aria-expanded="false" aria-label="Toggle navigation" 
+                style="border-color: #2e7d32;">
+          <span class="navbar-toggler-icon" style="filter: invert(1);"></span>
+        </button>
+
+        <div class="collapse navbar-collapse" id="navbarNav">
+          <ul class="navbar-nav ms-auto">
+            <li class="nav-item">
+              <a class="nav-link active text-white" href="{{ url_for('index') }}" style="font-weight: 600;">Inicio</a>
+            </li>
+            {% if nombre_usuario %}
+                <li class="nav-item dropdown">
+                  <a class="nav-link dropdown-toggle text-white" href="#" role="button" data-bs-toggle="dropdown" aria-expanded="false" style="font-weight: 600;">
+                    Hola, {{ nombre_usuario }}
+                  </a>
+                  <ul class="dropdown-menu dropdown-menu-end">
+                    <li><a class="dropdown-item" href="{{ url_for('logout') }}">Cerrar sesión</a></li>
+                  </ul>
+                </li>
+            {% else %}
+                <li class="nav-item">
+                  <a class="nav-link text-white" href="{{ url_for('login') }}" style="font-weight: 600;">Iniciar sesión</a>
+                </li>
+                <li class="nav-item">
+                  <a class="nav-link text-white" href="{{ url_for('register') }}" style="font-weight: 600;">Registrarse</a>
+                </li>
+            {% endif %}
+          </ul>
+        </div>
+      </div>
+    </nav>
+
+    <!-- Contenido principal -->
+    <div class="content-container">
+        <h1 class="text-center text-success mb-4">Calculadora de Huella de Carbono</h1>
+        <div class="text-center mb-4">
+            <img src="/static/eco.jpg" alt="Eco" style="max-width: 150px;" />
+        </div>
+
+        <form method="post">
+            <div class="mb-3">
+                <label for="km" class="form-label"><strong>¿Cuántos km recorres por semana?</strong></label>
+                <input type="number" name="km" step="any" class="form-control" required />
+            </div>
+
+            <div class="mb-3">
+                <label for="transporte" class="form-label"><strong>¿Qué medio de transporte usas?</strong></label>
+                <select name="transporte" class="form-select" required>
+                    <option value="auto">Auto (0.192 kg/km)</option>
+                    <option value="bus">Bus (0.089 kg/km)</option>
+                    <option value="tren">Tren (0.041 kg/km)</option>
+                    <option value="bicicleta">Bicicleta (0 kg/km)</option>
+                    <option value="moto">Motocicleta (0.103 kg/km)</option>
+                </select>
+            </div>
+
+            <button type="submit" class="btn custom-btn w-100">Calcular</button>
+        </form>
+
+        {% if result %}
+            <h2 class="mt-4 text-center text-primary">{{ result }}</h2>
+        {% endif %}
+
+        <!-- Recomendaciones siempre visibles -->
+        <div class="mt-5">
+            <h3 class="text-success">Recomendaciones para reducir tu huella de carbono</h3>
+            <ul class="list-group list-group-flush">
+                <li class="list-group-item">🌱 Usa transporte público, bicicleta o camina siempre que puedas.</li>
+                <li class="list-group-item">💡 Reduce el consumo eléctrico: apaga luces y dispositivos que no estés usando.</li>
+                <li class="list-group-item">🍃 Come más alimentos de origen vegetal y reduce el consumo de carne.</li>
+                <li class="list-group-item">🔄 Recicla y reutiliza productos para disminuir residuos.</li>
+                <li class="list-group-item">🌍 Elige productos locales y con menos empaques.</li>
+            </ul>
+        </div>
+    </div>
+
+    <!-- Pie de página -->
+    <footer class="text-center text-white mt-5 py-4" style="background-color: #2e7d32;">
+      <div class="container">
+        <p class="mb-1">Paulina Ixchel Arreguín Ruiz</p>
+        <p class="mb-1">Instituto Tecnológico de Chihuahua II</p>
+        <p class="mb-0">614 169 6330</p>
+      </div>
+    </footer>
+
+    <!-- Bootstrap JS -->
+    <script src="https://cdn.jsdelivr.net/npm/bootstrap@5.3.6/dist/js/bootstrap.bundle.min.js" crossorigin="anonymous"></script>
+</body>
+</html>
