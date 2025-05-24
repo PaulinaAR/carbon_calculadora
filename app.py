@@ -1,17 +1,20 @@
 from flask import Flask, render_template, request, redirect, url_for, flash, session, get_flashed_messages
-from flask_sqlalchemy import SQLAlchemy
-from sqlalchemy import text
 from werkzeug.security import generate_password_hash, check_password_hash
-import re
 from flask_mail import Mail, Message
-from datetime import datetime  # <-- NUEVO IMPORT
+from datetime import datetime
+from pymongo import MongoClient
+from bson.objectid import ObjectId
+import re
 
 app = Flask(__name__)
 app.secret_key = 'tu_clave_secreta'
 
-# Configuración de la base de datos
-app.config['SQLALCHEMY_DATABASE_URI'] = 'mysql+pymysql://root:Ryuzaki12599806@localhost/sesionCarbono'
-app.config['SQLALCHEMY_TRACK_MODIFICATIONS'] = False
+# Configuración MongoDB Atlas
+MONGO_URI = "mongodb+srv://root:Ryuzaki12599806@sesioncarbono.oahkgwc.mongodb.net/?retryWrites=true&w=majority&appName=sesionCarbono"
+client = MongoClient(MONGO_URI)
+db = client.mi_basedatos
+usuarios = db.usuarios
+registro_huella = db.registro_huella
 
 # Configuración del correo
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
@@ -19,50 +22,9 @@ app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
 app.config['MAIL_USERNAME'] = 'paulinaarreguinruiz108@gmail.com'
 app.config['MAIL_PASSWORD'] = 'kyhk gpnm ftnp lbpn'
-
-# Inicialización
-db = SQLAlchemy(app)
 mail = Mail(app)
 
 EMAIL_REGEX = r"[^@]+@[^@]+\.[^@]+"
-
-# -------------------------- MODELOS --------------------------
-
-class Usuario(db.Model):
-    __tablename__ = 'usuarios'
-    id = db.Column(db.Integer, primary_key=True)
-    nombre = db.Column(db.String(100), nullable=False)
-    email = db.Column(db.String(120), unique=True, nullable=False)
-    password_hash = db.Column(db.String(128), nullable=False)
-
-    registros = db.relationship('RegistroHuella', backref='usuario', cascade="all, delete", lazy=True)
-
-    def set_password(self, password):
-        self.password_hash = generate_password_hash(password)
-
-    def check_password(self, password):
-        return check_password_hash(self.password_hash, password)
-
-
-class RegistroHuella(db.Model):
-    __tablename__ = 'registro_huella'
-    id = db.Column(db.Integer, primary_key=True)
-    km = db.Column(db.Float, nullable=False)
-    transporte = db.Column(db.String(50), nullable=False)
-    huella = db.Column(db.Float, nullable=False)
-    usuario_id = db.Column(db.Integer, db.ForeignKey('usuarios.id'), nullable=False)
-    creado_en = db.Column(db.DateTime, server_default=text('CURRENT_TIMESTAMP'))
-
-# -------------------------- DB INIT --------------------------
-
-with app.app_context():
-    try:
-        db.session.execute(text('SELECT 1'))
-        print("✅ Conexión a MySQL exitosa.")
-    except Exception as e:
-        print("❌ Error al conectar con MySQL:", e)
-
-    db.create_all()
 
 # -------------------------- RUTAS --------------------------
 
@@ -93,11 +55,16 @@ def index():
             huella = km * factor
             result = f"Usando {transporte}, tu huella semanal estimada es de {huella:.2f} kg de CO₂."
 
-            usuario_id = session.get('user_id')
-            if usuario_id:
-                nuevo_registro = RegistroHuella(km=km, transporte=transporte, huella=round(huella, 2), usuario_id=usuario_id)
-                db.session.add(nuevo_registro)
-                db.session.commit()
+            user_id = session.get('user_id')
+            if user_id:
+                nuevo_registro = {
+                    "km": km,
+                    "transporte": transporte,
+                    "huella": round(huella, 2),
+                    "usuario_id": ObjectId(user_id),
+                    "creado_en": datetime.utcnow()
+                }
+                registro_huella.insert_one(nuevo_registro)
             else:
                 result = "Debes iniciar sesión para guardar tu huella de carbono."
 
@@ -106,9 +73,9 @@ def index():
 
     nombre_usuario = None
     if 'user_id' in session:
-        usuario = Usuario.query.get(session['user_id'])
+        usuario = usuarios.find_one({"_id": ObjectId(session['user_id'])})
         if usuario:
-            nombre_usuario = usuario.nombre
+            nombre_usuario = usuario.get("nombre")
 
     return render_template("index.html", result=result, nombre_usuario=nombre_usuario, mensajes_flash=mensajes_flash)
 
@@ -118,10 +85,10 @@ def login():
     if request.method == 'POST':
         email = request.form.get('email')
         password = request.form.get('password')
-        usuario = Usuario.query.filter_by(email=email).first()
-        if usuario and usuario.check_password(password):
-            session['user_id'] = usuario.id
-            flash(f'Bienvenido, {usuario.nombre}!', 'success')
+        usuario = usuarios.find_one({"email": email})
+        if usuario and check_password_hash(usuario["password_hash"], password):
+            session['user_id'] = str(usuario["_id"])
+            flash(f'Bienvenido, {usuario["nombre"]}!', 'success')
             return redirect(url_for('index'))
         else:
             flash('Correo o contraseña incorrectos', 'danger')
@@ -146,14 +113,18 @@ def register():
             flash('Correo electrónico no válido.', 'warning')
             return redirect(url_for('register'))
 
-        if Usuario.query.filter_by(email=email).first():
+        if usuarios.find_one({"email": email}):
             flash('El correo ya está registrado', 'warning')
             return redirect(url_for('register'))
 
-        nuevo_usuario = Usuario(nombre=nombre, email=email)
-        nuevo_usuario.set_password(password)
-        db.session.add(nuevo_usuario)
-        db.session.commit()
+        password_hash = generate_password_hash(password)
+        nuevo_usuario = {
+            "nombre": nombre,
+            "email": email,
+            "password_hash": password_hash,
+            "creado_en": datetime.utcnow()
+        }
+        usuarios.insert_one(nuevo_usuario)
 
         try:
             msg = Message(subject="Bienvenido a EcoHuella",
@@ -173,20 +144,20 @@ def register():
 
 @app.route('/logout')
 def logout():
-    usuario_id = session.get('user_id')
-    if usuario_id:
-        usuario = Usuario.query.get(usuario_id)
+    user_id = session.get('user_id')
+    if user_id:
+        usuario = usuarios.find_one({"_id": ObjectId(user_id)})
         if usuario:
             try:
                 ahora = datetime.now().strftime("%d/%m/%Y %H:%M:%S")
                 msg = Message(subject="Sesión cerrada exitosamente",
                               sender=app.config['MAIL_USERNAME'],
-                              recipients=[usuario.email])
+                              recipients=[usuario['email']])
                 msg.html = f"""
                 <html>
                     <body style="font-family: Arial, sans-serif; background-color: #f4f4f4; padding: 20px;">
                         <div style="max-width: 600px; margin: auto; background-color: #ffffff; padding: 20px; border-radius: 10px;">
-                            <h2 style="color: #2e8b57;">Hola, {usuario.nombre} 👋</h2>
+                            <h2 style="color: #2e8b57;">Hola, {usuario['nombre']} 👋</h2>
                             <p>Tu sesión en <strong>EcoHuella</strong> se ha cerrado correctamente.</p>
                             <p><strong>Fecha y hora:</strong> {ahora}</p>
                             <p>Si no fuiste tú, por favor contáctanos lo antes posible.</p>
@@ -208,8 +179,9 @@ def logout():
 @app.route("/test-db")
 def test_db():
     try:
-        db.session.execute(text('SELECT 1'))
-        return "✅ Conexión a la base de datos establecida correctamente."
+        # Prueba simple: contar usuarios
+        count = usuarios.count_documents({})
+        return f"✅ Conexión a la base de datos establecida. Usuarios registrados: {count}"
     except Exception as e:
         return f"❌ Error en la conexión a la base de datos: {e}"
 
