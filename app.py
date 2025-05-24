@@ -1,3 +1,4 @@
+import os
 from flask import Flask, render_template, request, redirect, url_for, flash, session, get_flashed_messages
 from werkzeug.security import generate_password_hash, check_password_hash
 from flask_mail import Mail, Message
@@ -7,21 +8,21 @@ from bson.objectid import ObjectId
 import re
 
 app = Flask(__name__)
-app.secret_key = 'tu_clave_secreta'
+app.secret_key = os.environ.get("FLASK_SECRET_KEY", "clave-secreta-por-defecto")
 
-# Configuración MongoDB Atlas
-MONGO_URI = "mongodb+srv://root:Ryuzaki12599806@sesioncarbono.oahkgwc.mongodb.net/?retryWrites=true&w=majority&appName=sesionCarbono"
+# ---------------------- CONFIGURACIÓN DE MONGO ----------------------
+MONGO_URI = os.environ.get("MONGO_URI")
 client = MongoClient(MONGO_URI)
 db = client.mi_basedatos
 usuarios = db.usuarios
 registro_huella = db.registro_huella
 
-# Configuración del correo
+# ---------------------- CONFIGURACIÓN DE CORREO ----------------------
 app.config['MAIL_SERVER'] = 'smtp.gmail.com'
 app.config['MAIL_PORT'] = 587
 app.config['MAIL_USE_TLS'] = True
-app.config['MAIL_USERNAME'] = 'paulinaarreguinruiz108@gmail.com'
-app.config['MAIL_PASSWORD'] = 'kyhk gpnm ftnp lbpn'
+app.config['MAIL_USERNAME'] = os.environ.get("MAIL_USERNAME")
+app.config['MAIL_PASSWORD'] = os.environ.get("MAIL_PASSWORD")
 mail = Mail(app)
 
 EMAIL_REGEX = r"[^@]+@[^@]+\.[^@]+"
@@ -79,7 +80,6 @@ def index():
 
     return render_template("index.html", result=result, nombre_usuario=nombre_usuario, mensajes_flash=mensajes_flash)
 
-
 @app.route('/login', methods=['GET', 'POST'])
 def login():
     if request.method == 'POST':
@@ -96,7 +96,6 @@ def login():
 
     mensajes_flash = [msg for msg in get_flashed_messages(with_categories=True) if msg[0] == 'danger']
     return render_template('login.html', mensajes_flash=mensajes_flash)
-
 
 @app.route('/register', methods=['GET', 'POST'])
 def register():
@@ -141,7 +140,6 @@ def register():
     mensajes_flash = [msg for msg in get_flashed_messages(with_categories=True) if msg[0] in ['warning', 'danger']]
     return render_template('register.html', mensajes_flash=mensajes_flash)
 
-
 @app.route('/logout')
 def logout():
     user_id = session.get('user_id')
@@ -175,18 +173,13 @@ def logout():
     flash('Has cerrado sesión', 'info')
     return redirect(url_for('index'))
 
-
 @app.route("/test-db")
 def test_db():
     try:
-        # Prueba simple: contar usuarios
         count = usuarios.count_documents({})
         return f"✅ Conexión a la base de datos establecida. Usuarios registrados: {count}"
     except Exception as e:
         return f"❌ Error en la conexión a la base de datos: {e}"
-
-
-# -------------------------- RUN --------------------------
 
 if __name__ == "__main__":
     app.run(debug=True)
